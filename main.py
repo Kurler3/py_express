@@ -8,7 +8,7 @@ def log_middleware(req, res, next):
 def hello_word(req: Request, res):
 
     res.status(201).json({
-        "message": f"Echo from {req.path} {req.method}"
+        "message": f"Echo from {req.path} {req.method}. Query params: {req.query}"
     })
 
 if __name__ == "__main__":
@@ -18,8 +18,6 @@ if __name__ == "__main__":
     server.get('/hello', log_middleware,  hello_word)
 
     server.listen('localhost', 3000)
-
-
 
 
 
