@@ -34,6 +34,7 @@ class CustomHandler(BaseHTTPRequestHandler):
         )
 
         try: 
+
             # Need to use regex to find a match in the routes.
             route = self._find_route_match(path=request.path_without_query, method=request.method)
 
@@ -65,9 +66,11 @@ class CustomHandler(BaseHTTPRequestHandler):
         except Exception as e:
             print(f"Error: {e}")
             if response:
+
+                #TODO If there is an error middleware, send the error there.
+
                 response.status(500).json({ "error": "Something went wrong" })
         
-
     #TODO Override the POST handler.
 
     #TODO Override the PUT handler.
@@ -79,25 +82,23 @@ class CustomHandler(BaseHTTPRequestHandler):
 
     def _find_route_match(self, path, method):
         for route in self.framework.routes.keys():
-            route_regex = self._build_route_regex(route)
-            is_route_match = route_regex.match(path)
-            if is_route_match and method in self.framework.routes[route]:
+            # Check match and if method is in the routes dict.
+            if self._check_route_match(route, path) and method in self.framework.routes[route]: 
                 return route
         return None
 
-    
-    def _build_route_regex(self, route):
-        
-        """Converts a route pattern with dynamic params into a regex."""
-        
-        # Match dynamic params like :id and replace them with a capturing group in regex
-        route = route.replace("/", r"\/")  # Escape slashes
+    def _check_route_match(self, route, path):
 
-        # Use regex to find all :param-style placeholders in the route
-        # and replace them with corresponding regex patterns
+        # Split both the route and the path by /
+        route_split = route.split('/')
+        path_split = path.split('/')
 
-        #TODO Need to figure this out
-        route = re.sub(r":(\w+)", r"(?P<\1>[\w-]+)", route)  # Match dynamic params
-    
-        # Return the compiled regex pattern
-        return re.compile(f"^{route}$")
+        if len(route_split) != len(path_split): return False
+
+        for i in range(len(route_split)):
+            
+            if route_split[i].startswith(':') and path_split[i] != '': continue
+
+            if route_split[i] != path_split[i]: return False
+
+        return True

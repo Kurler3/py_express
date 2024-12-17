@@ -62,7 +62,7 @@ class PyExpress:
 
         if not self._is_valid_middleware(middleware):
             raise ValueError("Invalid middleware provided. Middleware should have args: req, res, next")
-        self.global_middlewares.push(middleware)
+        self.global_middlewares.append(middleware)
 
         if self.debug_mode:
             print(f'Added global middleware to server. Current global middlewares: {self.global_middlewares}')

@@ -15,7 +15,10 @@ if __name__ == "__main__":
      
     server = PyExpress(debug_mode=True)
 
-    server.get('/hello', log_middleware,  hello_word)
+    server.use(log_middleware)
+
+    server.get('/hello',  hello_word)
+    server.get('/hello/:id', hello_word)
 
     server.listen('localhost', 3000)
 
