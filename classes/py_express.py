@@ -5,27 +5,16 @@ import threading
 from classes.http_server import CustomHandler 
 
 
-# Core Concepts:
-
-# HTTP routing (with support for dynamic paths).
-# Handling HTTP methods and paths.
-# Middlewares for pre- and post-processing.
-# Error handling and returning meaningful status codes and responses.
-
-# Main components you’ll need:
-
-# An HTTP request handling system (request and response abstractions).
-# A routing system that maps URLs (with HTTP methods) to functions.
-# Middleware support (global and route-specific).
-# Static file support.
-# Server loop to listen on a port and handle requests.
-
 class PyExpress:
     
     def __init__(self, debug_mode=False):
         
         self.debug_mode = debug_mode
+        
         self.global_middlewares = []
+        
+        # Error middleware.
+        self.error_midleware = None
 
         # Map from (resource) to method to functions (middleware, then controller)
         self.routes = {}
@@ -42,6 +31,10 @@ class PyExpress:
 
         print(f"Server running on {host}:{port}")
         
+        if self.debug_mode:
+            print(f"Global middlewares length: {len(self.global_middlewares)}")
+            print(f"Routes: {list(self.routes.keys())}")
+
         # Start the HTTP server in a separate thread to avoid blocking
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
@@ -62,10 +55,24 @@ class PyExpress:
 
         if not self._is_valid_middleware(middleware):
             raise ValueError("Invalid middleware provided. Middleware should have args: req, res, next")
-        self.global_middlewares.append(middleware)
+        
+        
+        # If the middleware takes 4 args, use it as an error middleware.
+        if len(inspect.signature(middleware).parameters) == 4:
 
-        if self.debug_mode:
-            print(f'Added global middleware to server. Current global middlewares: {self.global_middlewares}')
+            if self.error_midleware:
+                raise ValueError("Error middleware already defined.")
+
+            self.error_midleware = middleware
+
+            if self.debug_mode:
+                print(f'Added error middleware to server.')
+            
+        # Otherwise, use it as a normal global middleware.
+        else:
+            self.global_middlewares.append(middleware)
+            if self.debug_mode:
+                print(f'Added global middleware to server. Current global middlewares length: {len(self.global_middlewares)}')
 
     # Get
     def get(self, resource: str, middlewares: Callable | List[Callable], controller: Optional[Callable]=None) -> None:
@@ -148,7 +155,7 @@ class PyExpress:
         self.routes[resource][method] = middlewares + [controller]
 
         if self.debug_mode:
-            print(f'Added new route. Current routes: {self.routes}')
+            print(f'Added new route. Current routes: {list(self.routes.keys())}')
 
         pass
 
@@ -160,7 +167,9 @@ class PyExpress:
         return self._is_valid_function(
             function=middleware, 
             required_num_args=3,
-            required_arg_names=['req', 'res', 'next']
+            max_num_args=4, # In case of being an error middleware.
+            required_arg_names=['req', 'res', 'next'],
+            exact=False
         )
     
     def _is_valid_controller(self, controller: Callable) -> bool:
@@ -173,13 +182,14 @@ class PyExpress:
             function=controller,
             required_arg_names=['req', 'res'],
             required_num_args=2,
-            exact=False
+            exact=True
         )
         
     def _is_valid_function(
             self, 
             function: Callable, 
-            required_num_args: int, 
+            required_num_args: int,
+            max_num_args: int=None,
             required_arg_names: Optional[List[str]]=None,
             exact:bool=True
     ) -> bool:
@@ -196,6 +206,9 @@ class PyExpress:
         
         if not exact and len(parameters) < required_num_args:
             return False
+        
+        if max_num_args and len(parameters) > max_num_args:
+            return False
 
         if required_arg_names:
 
@@ -205,8 +218,10 @@ class PyExpress:
                 return False
 
             if not exact:
-                for param_name in param_names:
-                    if param_name not in required_arg_names:
+                for required_arg in required_arg_names:
+                    if required_arg not in param_names:
                         return False 
+                
+                    
 
         return True

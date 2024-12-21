@@ -1,7 +1,7 @@
 from http.server import BaseHTTPRequestHandler
 from classes.response import Response
 from classes.request import Request
-import re
+
 
 class CustomHandler(BaseHTTPRequestHandler):
 
@@ -16,9 +16,9 @@ class CustomHandler(BaseHTTPRequestHandler):
 
     # Override the GET handler.
     def do_GET(self):
-
         """Handle GET requests."""
 
+        # Create the request instance.
         request = Request(
             path=self.path,
             method='GET',
@@ -26,6 +26,7 @@ class CustomHandler(BaseHTTPRequestHandler):
             body=None,
         )
 
+        # Create response instance
         response = Response(
             server=self,
             path=self.path,
@@ -33,15 +34,57 @@ class CustomHandler(BaseHTTPRequestHandler):
             headers=self.headers,
         )
 
-        try: 
+        # Handle the request
+        self._handle_request(request, response, 'GET')
+
+    # TODO Override the POST handler.
+    def do_POST(self):
+        """Handle POST requests."""
+
+        print(repr(self))
+
+        # Create the request instance.
+        request = Request(
+            path=self.path,
+            method='POST',
+            headers=self.headers,
+            body=self.body,
+        )
+
+        # Create response instance
+        response = Response(
+            server=self,
+            path=self.path,
+            method="POST",
+            headers=self.headers,
+        )
+
+        # Handle the request
+        self._handle_request(request, response, 'POST')
+
+    # TODO Override the PUT handler.
+
+    # TODO Override the PATCH handler.
+
+    # TODO Override the DEL handler.
+
+    # Function that handles requests.
+    def _handle_request(self, request, response, method):
+
+        try:
 
             # Need to use regex to find a match in the routes.
-            route = self._find_route_match(path=request.path_without_query, method=request.method)
+            route = self._find_route_match(
+                path=request.path_without_query, method=request.method)
 
             # If found the route
             if route:
 
-                handlers = self.framework.global_middlewares + self.framework.routes[route]["GET"]
+                # Parse the params, now that the route is found.
+                request.parse_params(route)
+
+                handlers = self.framework.global_middlewares + \
+                    self.framework.routes[route][method]
 
                 # Function to process the middleware chain
                 def next_handler(index=0):
@@ -54,7 +97,8 @@ class CustomHandler(BaseHTTPRequestHandler):
                         if index == len(handlers) - 1:
                             current_handler(request, response)
                         else:
-                            current_handler(request, response, lambda: next_handler(index + 1))
+                            current_handler(request, response,
+                                            lambda: next_handler(index + 1))
 
                 # Start the middleware chain
                 next_handler()
@@ -63,27 +107,24 @@ class CustomHandler(BaseHTTPRequestHandler):
 
             if not route:
                 response.status(404).send({"error": "Not Found"})
+
         except Exception as e:
-            print(f"Error: {e}")
+
+            if self.framework.debug_mode:
+                print(f"Error: {e}")
+
             if response:
+                # If there is an error middleware, send the error there.
+                if self.framework.error_midleware:
+                    self.framework.error_midleware(request, response, None, e)
+                    return
 
-                #TODO If there is an error middleware, send the error there.
-
-                response.status(500).json({ "error": "Something went wrong" })
-        
-    #TODO Override the POST handler.
-
-    #TODO Override the PUT handler.
-
-    #TODO Override the PATCH handler.
-
-    #TODO Override the DEL handler.
-
+                response.status(500).json({"error": "Something went wrong"})
 
     def _find_route_match(self, path, method):
         for route in self.framework.routes.keys():
             # Check match and if method is in the routes dict.
-            if self._check_route_match(route, path) and method in self.framework.routes[route]: 
+            if self._check_route_match(route, path) and method in self.framework.routes[route]:
                 return route
         return None
 
@@ -93,12 +134,15 @@ class CustomHandler(BaseHTTPRequestHandler):
         route_split = route.split('/')
         path_split = path.split('/')
 
-        if len(route_split) != len(path_split): return False
+        if len(route_split) != len(path_split):
+            return False
 
         for i in range(len(route_split)):
-            
-            if route_split[i].startswith(':') and path_split[i] != '': continue
 
-            if route_split[i] != path_split[i]: return False
+            if route_split[i].startswith(':') and path_split[i] != '':
+                continue
+
+            if route_split[i] != path_split[i]:
+                return False
 
         return True
