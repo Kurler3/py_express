@@ -1,6 +1,8 @@
 from http.server import BaseHTTPRequestHandler
 from classes.response import Response
 from classes.request import Request
+import json
+from urllib.parse import parse_qs
 
 
 class CustomHandler(BaseHTTPRequestHandler):
@@ -41,14 +43,27 @@ class CustomHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         """Handle POST requests."""
 
-        print(repr(self))
+        # Read the content length to determine how many bytes to read from the input stream
+        content_length = int(self.headers.get('Content-Length', 0))
+        raw_body = self.rfile.read(content_length) if content_length > 0 else None
+
+        body = None
+
+        if raw_body:
+            try:
+                # Try to decode the body as JSON
+                body = json.loads(raw_body.decode('utf-8'))
+            except:
+                # Decode the body into a string as a fallback.
+                body = raw_body.decode('utf-8')
+           
 
         # Create the request instance.
         request = Request(
             path=self.path,
             method='POST',
             headers=self.headers,
-            body=self.body,
+            body=body,
         )
 
         # Create response instance
@@ -114,9 +129,12 @@ class CustomHandler(BaseHTTPRequestHandler):
                 print(f"Error: {e}")
 
             if response:
+
                 # If there is an error middleware, send the error there.
                 if self.framework.error_midleware:
+
                     self.framework.error_midleware(request, response, None, e)
+                    
                     return
 
                 response.status(500).json({"error": "Something went wrong"})
@@ -146,3 +164,49 @@ class CustomHandler(BaseHTTPRequestHandler):
                 return False
 
         return True
+
+    # Parse body
+    def _parse_body(self):
+
+         # Read the content length to determine how many bytes to read from the input stream
+        content_length = int(self.headers.get('Content-Length', 0))
+        raw_body = self.rfile.read(content_length) if content_length > 0 else None
+
+        if not raw_body:
+            return None
+        
+        # Retrieve the Content-Type header
+        content_type = self.headers.get('Content-Type', '').split(';')[0]  # Split to ignore charset
+
+        # Handle different content types
+        try:
+
+            if content_type == "application/json":
+                # Parse JSON body
+                return json.loads(raw_body.decode('utf-8'))
+
+            elif content_type == "application/x-www-form-urlencoded":
+                # Parse form-encoded body
+                return parse_qs(raw_body.decode('utf-8'))
+
+            elif content_type == "text/plain":
+                # Decode plain text
+                return raw_body.decode('utf-8')
+
+            elif content_type.startswith("multipart/"):
+
+                #TODO
+
+                # Handle file uploads or multipart bodies (not implemented here)
+                raise NotImplementedError("Multipart parsing is not implemented.")
+
+            else:
+                # Return raw body for unsupported types
+                return raw_body.decode('utf-8')
+
+        except Exception as e:
+
+            # Log parsing errors and re-raise if necessary
+            if self.framework.debug_mode:
+                print(f"Error parsing body: {e}")
+            raise ValueError("Unable to parse body")

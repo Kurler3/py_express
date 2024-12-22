@@ -27,7 +27,7 @@ class Request:
         return {key: value[0] for key, value in query_params.items()}
 
     def __repr__(self):
-        return f"Request(path={self.path}, method={self.method}, query={self.query}, params={self.params})"
+        return f"Request(path={self.path}, method={self.method}, query={self.query}, params={self.params}, body={self.body})"
     
     # Parse the params.
     def parse_params(self, route):

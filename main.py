@@ -1,5 +1,6 @@
 from classes.py_express import PyExpress
 from classes.request import Request
+from classes.response import Response
 
 def log_middleware(req, res, next):
     print(f"Received request {repr(req)}")
@@ -12,8 +13,14 @@ def hello_word(req: Request, res):
         "message": f"Echo from {req.path} {req.method}. Query params: {req.query}. "
     })
 
+def post_example(req: Request, res: Response):
+    res.status(200).json({
+        "message": "Post example",
+        "body": req.body
+    })
+
 def error_catcher(req, res, next, err):
-    print(f"Error: {err}")
+    print(f"Error in middleware error catcher: {err}")
 
     # Convert error to string to ensure it can be displayed
     error_message = str(err)
@@ -34,9 +41,8 @@ if __name__ == "__main__":
     server.use(error_catcher)
 
     server.get('/hello',  hello_word)
-    server.get('/hello/:id', hello_word)
-    server.get('/hello/:id/:name/aaaaaaaaaa/:no', hello_word)
-
+    
+    server.post('/post', post_example)
     
 
 
