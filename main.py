@@ -44,20 +44,4 @@ if __name__ == "__main__":
     
     server.post('/post', post_example)
     
-
-
     server.listen('localhost', 3000)
-
-
-
-
-
-# Apply global middleware.
-
-# Define routes.
-    # Static routes
-    # Dynamic routes with req params
-
-# Define error middleware.
-
-# Start listening for requests.
