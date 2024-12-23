@@ -21,50 +21,54 @@ class CustomHandler(BaseHTTPRequestHandler):
 
     # Override the GET handler.
     def do_GET(self):
+
         """Handle GET requests."""
 
-        # Create the request instance.
-        request = Request(
-            path=self.path,
-            method='GET',
-            headers=self.headers,
-            body=None,
-        )
-
-        # Create response instance
-        response = Response(
-            server=self,
-            path=self.path,
-            method="GET",
-            headers=self.headers,
-        )
-
         # Handle the request
-        self._handle_request(request, response, 'GET')
+        self._handle_request('GET')
 
-    # TODO Override the POST handler.
+    # Override the POST handler.
     def do_POST(self):
+
         """Handle POST requests."""
 
-        # Read the content length to determine how many bytes to read from the input stream
-        content_length = int(self.headers.get('Content-Length', 0))
-        raw_body = self.rfile.read(
-            content_length) if content_length > 0 else None
+        # Handle the request
+        self._handle_request('POST')
+
+    # Override the PUT handler.
+    def do_PUT(self):
+        """Handle PUT requests."""
+
+        # Handle the request
+        self._handle_request('PUT')
+
+    # Override the PATCH handler.
+    def do_PATCH(self):
+        """Handle PATCH requests."""
+
+        # Handle the request
+        self._handle_request('PATCH')
+
+    # Override the DEL handler.
+    def do_DEL(self):
+        """Handle DEL requests."""
+
+        # Handle the request
+        self._handle_request('DEL')
+
+    # Function that handles requests.
+    def _handle_request(self, method):
 
         body = None
 
-        if raw_body:
-            try:
-                # Try to decode the body as JSON
-                body = json.loads(raw_body.decode('utf-8'))
-            except:
-                # Decode the body into a string as a fallback.
-                body = raw_body.decode('utf-8')
+        # Parse body (if method is not GET)
+        if method != 'GET':
+            body = self._parse_body()
 
         # Create the request instance.
         request = Request(
             path=self.path,
-            method='POST',
+            method=method,
             headers=self.headers,
             body=body,
         )
@@ -73,23 +77,13 @@ class CustomHandler(BaseHTTPRequestHandler):
         response = Response(
             server=self,
             path=self.path,
-            method="POST",
+            method=method,
             headers=self.headers,
         )
 
-        # Handle the request
-        self._handle_request(request, response, 'POST')
-
-    # TODO Override the PUT handler.
-
-    # TODO Override the PATCH handler.
-
-    # TODO Override the DEL handler.
-
-    # Function that handles requests.
-    def _handle_request(self, request, response, method):
-
         try:
+
+
 
             # Need to use regex to find a match in the routes.
             route = self._find_route_match(
@@ -283,3 +277,5 @@ class CustomHandler(BaseHTTPRequestHandler):
 
                 # Treat as a regular field
                 parsed_data[field_name] = content.decode('utf-8').strip()
+
+        return parsed_data
