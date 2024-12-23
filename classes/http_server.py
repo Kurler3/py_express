@@ -3,6 +3,9 @@ from classes.response import Response
 from classes.request import Request
 import json
 from urllib.parse import parse_qs
+import re
+import tempfile
+
 
 
 class CustomHandler(BaseHTTPRequestHandler):
@@ -45,7 +48,8 @@ class CustomHandler(BaseHTTPRequestHandler):
 
         # Read the content length to determine how many bytes to read from the input stream
         content_length = int(self.headers.get('Content-Length', 0))
-        raw_body = self.rfile.read(content_length) if content_length > 0 else None
+        raw_body = self.rfile.read(
+            content_length) if content_length > 0 else None
 
         body = None
 
@@ -56,7 +60,6 @@ class CustomHandler(BaseHTTPRequestHandler):
             except:
                 # Decode the body into a string as a fallback.
                 body = raw_body.decode('utf-8')
-           
 
         # Create the request instance.
         request = Request(
@@ -134,7 +137,7 @@ class CustomHandler(BaseHTTPRequestHandler):
                 if self.framework.error_midleware:
 
                     self.framework.error_midleware(request, response, None, e)
-                    
+
                     return
 
                 response.status(500).json({"error": "Something went wrong"})
@@ -168,15 +171,17 @@ class CustomHandler(BaseHTTPRequestHandler):
     # Parse body
     def _parse_body(self):
 
-         # Read the content length to determine how many bytes to read from the input stream
+        # Read the content length to determine how many bytes to read from the input stream
         content_length = int(self.headers.get('Content-Length', 0))
-        raw_body = self.rfile.read(content_length) if content_length > 0 else None
+        raw_body = self.rfile.read(
+            content_length) if content_length > 0 else None
 
         if not raw_body:
             return None
-        
+
         # Retrieve the Content-Type header
-        content_type = self.headers.get('Content-Type', '').split(';')[0]  # Split to ignore charset
+        content_type = self.headers.get(
+            'Content-Type', '').split(';')[0]  # Split to ignore charset
 
         # Handle different content types
         try:
@@ -186,6 +191,7 @@ class CustomHandler(BaseHTTPRequestHandler):
                 return json.loads(raw_body.decode('utf-8'))
 
             elif content_type == "application/x-www-form-urlencoded":
+
                 # Parse form-encoded body
                 return parse_qs(raw_body.decode('utf-8'))
 
@@ -194,12 +200,7 @@ class CustomHandler(BaseHTTPRequestHandler):
                 return raw_body.decode('utf-8')
 
             elif content_type.startswith("multipart/"):
-
-                #TODO
-
-                # Handle file uploads or multipart bodies (not implemented here)
-                raise NotImplementedError("Multipart parsing is not implemented.")
-
+                return self._parse_multipart()
             else:
                 # Return raw body for unsupported types
                 return raw_body.decode('utf-8')
@@ -210,3 +211,75 @@ class CustomHandler(BaseHTTPRequestHandler):
             if self.framework.debug_mode:
                 print(f"Error parsing body: {e}")
             raise ValueError("Unable to parse body")
+
+    # Parse multipart
+    def _parse_multipart(self):
+        """Parse a multipart/form-data body."""
+
+        content_type = self.headers.get('Content-Type')
+        if not content_type or 'multipart/form-data' not in content_type:
+            return None  # Return None if not multipart
+
+        # Extract the boundary from the Content-Type header
+        boundary = re.search(
+            r'boundary=(.*)', content_type).group(1).encode('utf-8')
+        if not boundary:
+            raise ValueError("Boundary not found in Content-Type header")
+
+        # Read the raw body
+        raw_body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+
+        if not raw_body:
+            return None
+
+        # Split the body into parts based on the boundary!
+        parts = raw_body.split(b'--' + boundary)
+
+        # Init the parsed data (dict)
+        parsed_data = {}
+
+        # For each part
+        for part in parts:
+
+            # If empty part or beginning of body or end of body => continue
+            if not part or part == b'--' or part == b'--\r\n':
+                continue
+
+            # Get the headers and the content.
+            headers, content = part.split(b'\r\n\r\n', 1)
+
+            # Decode the headers and split.
+            headers = headers.decode('utf-8').split('\r\n')
+
+            # Parse Content-Disposition header to get field name and filename
+            disposition = [h for h in headers if h.lower().startswith('content-disposition')][0]
+
+            # Try to find a match for the specified disposition
+            match = re.search(r'form-data; name="(.*?)"(; filename="(.*?)")?', disposition)
+            
+            if not match:
+                continue
+            
+            field_name = match.group(1)
+            
+            filename = match.group(3)
+            
+            # Handle files
+            if filename:
+
+                # Save file content to a temporary file (will be deleted after the request is over)
+                temp_file = tempfile.NamedTemporaryFile(delete=True)
+                temp_file.write(content.strip())
+                temp_file.seek(0)  # Reset the file pointer to read later if needed
+
+                parsed_data[field_name] = {
+                    "filename": filename,
+                    "filepath": temp_file.name,
+                    "content": None, # Could add an option to read this directly and store in memory instead of storing the file temporarily.
+                }
+
+            # Just a text field.
+            else:
+
+                # Treat as a regular field
+                parsed_data[field_name] = content.decode('utf-8').strip()
